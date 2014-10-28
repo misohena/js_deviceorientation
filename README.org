@@ -1,0 +1,5 @@
+* JavaScript DeviceOrientation Viewer
+
+DeviceOrientationイベントの内容を表示します。
+
+[[file:screenshot.jpg]]

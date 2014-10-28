@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=720px" />
+    <title>DeviceOrientation Event Example</title>
+    <style>
+body {
+  font-size: 16px;
+  line-height: 1.0;
+}
+table {
+  border-collapse: collapse;
+  border: 2px solid black;
+  margin: 0.5em;
+}
+table td {
+  border: 2px solid black;
+  padding: 3px;
+}
+table th {
+  border: 2px solid black;
+}
+.prop-name {
+  width: 120px;
+}
+.prop-value {
+  text-align: right;
+  width: 180px;
+}
+.prop-chart {
+  width: 400px;
+  padding: 0;
+}
+    </style>
+  </head>
+  <body>
+    <h1>DeviceOrientation Event Example</h1>
+    <ul>
+      <li><a href="http://www.w3.org/TR/screen-orientation/">The Screen Orientation API - W3C</a></li>
+      <li><a href="http://www.w3.org/TR/orientation-event/">DeviceOrientation Event Specification - W3C</a></li>
+      <li><a href="https://developer.mozilla.org/ja/docs/DOM/Orientation_and_motion_data_explained">Orientation_and_motion_data_explained - MDN</a></li>
+    </ul>
+
+    <h2>screen.orientation property(orientationchange event)</h2>
+    <div id="screen-ori-text"></div>
+
+    <h2>deviceorientation event</h2>
+    <div id="orientation-text"></div>
+    <p>※画面の向きに注意。向きが変わっても(portraitになろうがlandscapeになろうが)デバイスのX,Y,Z軸は変わらない。</p>
+
+    <h2>devicemotion event</h2>
+    <div id="motion-text"></div>
+
+    <h2>compassneedscalibration event</h2>
+    <div id="needscalibration-text"></div>
+
+
+    <script>
+function getNowTime()
+{
+  var now = new Date();
+  return ("0"+now.getHours()).substr(-2)+":"+
+    ("0"+now.getMinutes()).substr(-2)+":"+
+    ("0"+now.getSeconds()).substr(-2)+"."+
+    ("00"+now.getMilliseconds()).substr(-3);
+}
+
+function createChart()
+{
+  var canvas = document.createElement("canvas");
+  var width = 400;
+  var height = 100;
+  canvas.width = width;
+  canvas.height = height;
+  var ctx = canvas.getContext("2d");
+  var min = 0;
+  var max = 0;
+  var data = [];
+  canvas.addValue = function(v){
+    if(typeof(v) != "number"){
+      return;
+    }
+    if(data.length >= width){
+      data.splice(0, data.length - width + 1);
+    }
+    data.push(v);
+    if(v < min){min = v;}
+    if(v > max){max = v;}
+
+    function toCanvasY(v){
+      if(max === undefined || min === undefined || max == min){
+        return 0;
+      }
+      return height - height * (v - min) / (max - min);
+    }
+    ctx.fillStyle = "black";
+    ctx.fillRect(0,0,width,height);
+
+    ctx.strokeStyle = "red";
+    ctx.beginPath();
+    ctx.moveTo(0,toCanvasY(0));
+    ctx.lineTo(width,toCanvasY(0));
+    ctx.stroke();
+
+    ctx.strokeStyle = "white";
+    ctx.beginPath();
+    ctx.moveTo(0,toCanvasY(data[0]));
+    for(var i = 1; i < data.length; ++i){
+      ctx.lineTo(i, toCanvasY(data[i]));
+    }
+    ctx.stroke();
+  }
+  return canvas;
+}
+
+function createPropertyTable(props, defaultUnit){
+  var collection = {
+    children: {},
+    table: document.createElement("table"),
+    update: function(obj){
+      for(var childName in this.children){
+        this.children[childName].update(obj ? obj[childName] : undefined);
+      }
+    }
+  };
+
+  var table = collection.table;
+  table.props = collection;
+
+  for(var i = 0; i < props.length; ++i){
+    var tr = document.createElement("tr");
+
+    function addCollection(propInfo){
+      var name = propInfo.name;
+      var unit = propInfo.unit || defaultUnit;
+      var subTable = createPropertyTable(propInfo.children, unit);
+
+      var td = document.createElement("td");
+      td.setAttribute("colspan", "3");
+      td.appendChild(document.createTextNode(name));
+      td.appendChild(subTable);
+      tr.appendChild(td);
+
+      return subTable.props;
+    }
+    function addProperty(propInfo){
+      var name = propInfo.name;
+      var unit = propInfo.unit || defaultUnit;
+      var tdName = document.createElement("td");
+      tdName.className = "prop-name";
+      tdName.appendChild(document.createTextNode(name));
+      tr.appendChild(tdName);
+
+      var tdValue = document.createElement("td");
+      tdValue.className = "prop-value";
+      var tdValueText = document.createTextNode("");
+      tdValue.appendChild(tdValueText);
+      tr.appendChild(tdValue);
+
+      var tdDesc = document.createElement("td");
+      tdDesc.className = "prop-chart";
+
+      var chart = propInfo.chart === undefined || propInfo.chart ? createChart() : null;
+      if(chart){
+        tdDesc.appendChild(chart);
+        tdDesc.appendChild(document.createElement("br"));
+      }
+
+      tdDesc.appendChild(document.createTextNode(propInfo.desc || ""));
+      tr.appendChild(tdDesc);
+
+      return {
+        addValue: function(num){
+          tdValueText.nodeValue = (typeof(num) == "number" ? num.toFixed(8) : num) + (unit ? "[" + unit + "]" : "");
+          if(chart){
+            chart.addValue(num);
+          }
+        },
+        update: function(value){
+          this.addValue(value);
+        }
+      };
+    }
+
+    var propInfo = props[i];
+    if(propInfo.children){
+      collection[propInfo.name] = collection.children[propInfo.name] = addCollection(propInfo);
+    }
+    else{
+      collection[propInfo.name] = collection.children[propInfo.name] = addProperty(propInfo);
+    }
+    table.appendChild(tr);
+
+  }
+  return table;
+}
+
+function TimeController()
+{
+  var lastEventTime = 0;
+  var lastProcTime = 0;
+  var totalCount = 0;
+  var totalTime = 0;
+  this.tick = function(){
+    var currTime = Date.now();
+    if(lastEventTime){
+      ++totalCount;
+      totalTime += currTime - lastEventTime;
+    }
+    lastEventTime = currTime;
+    if(currTime < lastProcTime + 50){
+      return false;
+    }
+    lastProcTime = currTime;
+    return true;
+  };
+  function getIntervalAverage(){
+    return totalCount ? totalTime / totalCount : 0;
+  }
+  this.getUpdateTimeText = function(){
+    return "Update:" + getNowTime() + " Interval(Average):" + getIntervalAverage().toFixed(3) + "[ms]";
+  };
+}
+
+function createPropertyTableWithTimeController(targetId, props)
+{
+  var timeController = new TimeController();
+  var updateTime = document.createTextNode("");
+  var target = document.getElementById(targetId);
+  target.appendChild(updateTime);
+  var table = createPropertyTable(props);
+  target.appendChild(table);
+  table.update = function(obj){
+    updateTime.nodeValue = timeController.getUpdateTimeText();
+    if(timeController.tick()){
+      table.props.update(obj);
+      return true;
+    }
+    else{
+      return false;
+    }
+  };
+  return table;
+}
+
+
+var screenOriTable = createPropertyTableWithTimeController(
+  "screen-ori-text",
+  [
+    {name:"type", chart:false},
+    {name:"angle", chart:false, unit:"deg"}
+  ]);
+
+var orientationTable = createPropertyTableWithTimeController(
+  "orientation-text",
+  [
+    {name:"alpha", unit:"deg", desc:"[0,360) 方位角(yaw)(Z軸の回転角。X軸正方向からY軸正方向への回転が正。X軸が東を向いているとき0度)"},
+    {name:"beta", unit:"deg", desc:"[-180,180) 仰角(pitch)(X軸の回転角。Y軸正方向からZ軸正方向への回転が正)"},
+    {name:"gamma", unit:"deg", desc:"[-90,90) 傾斜角(roll)(Y軸の回転角。Z軸正方向からX軸正方向への回転が正)"},
+    {name:"absolute", unit:"bool", chart:false}
+  ]);
+
+var motionTable = createPropertyTableWithTimeController(
+  "motion-text",
+  [
+    {name:"acceleration", unit:"m/s^2", children:[
+      {name:"x"},
+      {name:"y"},
+      {name:"z"}]},
+    {name:"accelerationIncludingGravity", unit:"m/s^2", children:[
+      {name:"x"},
+      {name:"y"},
+      {name:"z"}]},
+    {name:"rotationRate", unit:"deg/s", children:[
+      {name:"alpha"},
+      {name:"beta"},
+      {name:"gamma"}]},
+    {name:"interval", unit:"ms"}]);
+
+var needsCalibrationTime = document.createTextNode("no-event");
+document.getElementById("needscalibration-text").appendChild(needsCalibrationTime);
+
+
+
+function updateScreenOrientation(ev)
+{
+  var screenObj = {
+    type: screen && ((screen.orientation && (screen.orientation.type || screen.orientation)) || screen.mozOrientation || screen.msOrientation),
+    angle: screen && screen.orientation && screen.orientation.angle
+  };
+  screenOriTable.update(screenObj);
+}
+updateScreenOrientation();
+
+function updateOrientationText(ev)
+{
+  orientationTable.update(ev);
+}
+
+function updateMotionText(ev)
+{
+  motionTable.update(ev);
+}
+
+
+function updateCompassNeedsCalibrationText(ev)
+{
+  needsCalibrationTime.nodeValue = getNowTime();
+  alert('Your compass needs calibrating! Wave your device in a figure-eight motion');
+  event.preventDefault();
+}
+
+
+window.addEventListener("deviceorientation", updateOrientationText, false);
+window.addEventListener("devicemotion", updateMotionText, false);
+window.addEventListener("compassneedscalibration", updateCompassNeedsCalibrationText, false);
+window.addEventListener("orientationchange", updateScreenOrientation, false);
+
+
+</script>
+
+  </body>
+</html>
