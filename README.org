@@ -2,4 +2,6 @@
 
 DeviceOrientationイベントの内容を表示します。
 
+[[http://misohena.github.io/js_deviceorientation/]]
+
 [[file:screenshot.jpg]]
