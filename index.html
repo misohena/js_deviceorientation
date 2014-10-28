@@ -56,6 +56,8 @@ table th {
     <h2>compassneedscalibration event</h2>
     <div id="needscalibration-text"></div>
 
+    <h2>左右の傾き検出(画面の向きを考慮)</h2>
+    <div id="left-right-tilt-text"></div>
 
     <script>
 function getNowTime()
@@ -312,11 +314,32 @@ function updateCompassNeedsCalibrationText(ev)
   event.preventDefault();
 }
 
-
 window.addEventListener("deviceorientation", updateOrientationText, false);
 window.addEventListener("devicemotion", updateMotionText, false);
 window.addEventListener("compassneedscalibration", updateCompassNeedsCalibrationText, false);
 window.addEventListener("orientationchange", updateScreenOrientation, false);
+
+
+
+
+if(screen && screen.orientation && typeof(screen.orientation.angle) == "number"){
+  var leftRightTiltAngleText = document.createTextNode("");
+  document.getElementById("left-right-tilt-text").appendChild(leftRightTiltAngleText);
+  function updateLeftRightTiltAngle(ev)
+  {
+    // r = rotz(alpha)*rotx(beta)*roty(gamma)*rotz(-screen.orientation.angle)*rowvec[1,0,0]
+    // tilt = sin^-1(r.z)
+    function rad(deg){return deg*(Math.PI/180);}
+    var b = rad(ev.beta);
+    var c = rad(ev.gamma);
+    var d = rad(-screen.orientation.angle);
+    var rz = Math.sin(b)*Math.sin(d)-Math.cos(b)*Math.sin(c)*Math.cos(d);
+    var tilt = Math.asin(rz)*(180/Math.PI);
+    leftRightTiltAngleText.nodeValue = tilt.toFixed(2) + "[deg]";
+  }
+  window.addEventListener("deviceorientation", updateLeftRightTiltAngle, false);
+}
+
 
 
 </script>
