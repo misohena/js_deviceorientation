@@ -279,11 +279,25 @@ var motionTable = createPropertyTableWithTimeController(
       {name:"alpha"},
       {name:"beta"},
       {name:"gamma"}]},
-    {name:"interval", unit:"ms"}]);
+    {name:"interval", unit:"ms", chart:false}]);
 
 var needsCalibrationTime = document.createTextNode("no-event");
 document.getElementById("needscalibration-text").appendChild(needsCalibrationTime);
 
+var leftTiltTable1 = createPropertyTableWithTimeController(
+  "left-right-tilt-text",
+  [
+    {name:"leftTiltAngleFromOrientationEvent", children:[
+      {name:"angle", unit:"deg"}
+    ]}
+  ]);
+var leftTiltTable2 = createPropertyTableWithTimeController(
+  "left-right-tilt-text",
+  [
+    {name:"leftTiltAngleFromMotionEvent", children:[
+      {name:"angle", unit:"deg"}
+    ]}
+  ]);
 
 
 function updateScreenOrientation(ev)
@@ -323,21 +337,38 @@ window.addEventListener("orientationchange", updateScreenOrientation, false);
 
 
 if(screen && screen.orientation && typeof(screen.orientation.angle) == "number"){
-  var leftRightTiltAngleText = document.createTextNode("");
-  document.getElementById("left-right-tilt-text").appendChild(leftRightTiltAngleText);
-  function updateLeftRightTiltAngle(ev)
-  {
+  function toRad(deg){return deg*(Math.PI/180);}
+  function toDeg(rad){return rad*(180/Math.PI);}
+  function getLeftTiltAngleFromOrientationEvent(orientationEvent){
     // r = rotz(alpha)*rotx(beta)*roty(gamma)*rotz(-screen.orientation.angle)*colvec[1,0,0]
     // tilt = sin^-1(r.z)
-    function rad(deg){return deg*(Math.PI/180);}
-    var b = rad(ev.beta);
-    var c = rad(ev.gamma);
-    var d = rad(-screen.orientation.angle);
+    var b = toRad(orientationEvent.beta || 0);
+    var c = toRad(orientationEvent.gamma || 0);
+    var d = toRad(-screen.orientation.angle);
     var rz = Math.sin(b)*Math.sin(d)-Math.cos(b)*Math.sin(c)*Math.cos(d);
-    var tilt = Math.asin(rz)*(180/Math.PI);
-    leftRightTiltAngleText.nodeValue = tilt.toFixed(2) + "[deg]";
+    return toDeg(Math.asin(rz));
   }
-  window.addEventListener("deviceorientation", updateLeftRightTiltAngle, false);
+  function getLeftTiltAngleFromMotionEvent(motionEvent){
+    var gravityX = (motionEvent.acceleration.x || 0) - (motionEvent.accelerationIncludingGravity.x || 0);
+    var gravityY = (motionEvent.acceleration.y || 0) - (motionEvent.accelerationIncludingGravity.y || 0);
+    var gravityZ = (motionEvent.acceleration.z || 0) - (motionEvent.accelerationIncludingGravity.z || 0);
+    var screenAngleRev = toRad(-screen.orientation.angle);
+    var rightX = Math.cos(screenAngleRev);
+    var rightY = Math.sin(screenAngleRev);
+    var dotGR = rightX * gravityX  + rightY * gravityY;
+    var rightGravity = dotGR / Math.sqrt(gravityX*gravityX+gravityY*gravityY+gravityZ*gravityZ);
+    return -(90 - toDeg(Math.acos(rightGravity)));
+  }
+  function updateLeftRightTiltAngleByOrientationEvent(ev)
+  {
+    leftTiltTable1.update({leftTiltAngleFromOrientationEvent: {angle: getLeftTiltAngleFromOrientationEvent(ev)}});
+  }
+  function updateLeftRightTiltAngleByMotionEvent(ev)
+  {
+    leftTiltTable2.update({leftTiltAngleFromMotionEvent: {angle: getLeftTiltAngleFromMotionEvent(ev)}});
+  }
+  window.addEventListener("deviceorientation", updateLeftRightTiltAngleByOrientationEvent, false);
+  window.addEventListener("devicemotion", updateLeftRightTiltAngleByMotionEvent, false);
 }
 
 
